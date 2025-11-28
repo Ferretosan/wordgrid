@@ -5,6 +5,8 @@
   --tile: #22212a;
   --glass: #2f2b36;
   --success: #2c7bd9;
+  /* base tile size; responsive rules will override */
+  --cell-size: 120px;
   font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
   color-scheme: dark;
 }
@@ -72,16 +74,16 @@ main {
 /* GRID: use 120px squares for headers and cells */
 .grid {
   display: grid;
-  grid-template-columns: 120px repeat(3, 120px);
-  grid-template-rows: 120px repeat(3, 120px);
+  grid-template-columns: var(--cell-size) repeat(3, var(--cell-size));
+  grid-template-rows: var(--cell-size) repeat(3, var(--cell-size));
   gap: 12px;
   align-items: center;
 }
 
 /* top-left logo square (same size as headers/cells) */
 .logo-square {
-  width: 120px;
-  height: 120px;
+  width: var(--cell-size);
+  height: var(--cell-size);
   border-radius: 12px;
   background: lnone;
   display: flex;
@@ -92,8 +94,8 @@ main {
 
 /* column headers (top row, after logo) - square same as cells */
 .col-header {
-  width: 120px;
-  height: 120px;
+  width: var(--cell-size);
+  height: var(--cell-size);
   border-radius: 12px;
   background: var(--glass);
   display: flex;
@@ -107,8 +109,8 @@ main {
 
 /* row headers (first column for each row) - square same as cells */
 .row-header {
-  width: 120px;
-  height: 120px;
+  width: var(--cell-size);
+  height: var(--cell-size);
   border-radius: 12px;
   background: var(--glass);
   display: flex;
@@ -121,8 +123,8 @@ main {
 
 /* inner cells */
 .cell {
-  width: 120px;
-  height: 120px;
+  width: var(--cell-size);
+  height: var(--cell-size);
   border-radius: 12px;
   background: var(--tile);
   display: flex;
@@ -375,4 +377,92 @@ button {
 
 button.secondary {
   background: #6f6b7a;
+}
+
+/* -------- Responsive / Mobile rules -------- */
+@media (max-width: 900px) {
+  :root {
+    /* let tiles shrink on medium screens */
+    --cell-size: min(100px, calc((100vw - 64px) / 4));
+  }
+
+  body {
+    padding: 16px;
+  }
+
+  main {
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 12px;
+  }
+
+  .grid-wrap {
+    justify-content: center;
+  }
+
+  aside#sidebar {
+    width: 100%;
+    order: 2;
+  }
+
+  #boardArea {
+    order: 1;
+  }
+
+  .modal-content {
+    width: calc(100% - 32px);
+    max-width: 420px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --cell-size: min(80px, calc((100vw - 40px) / 4));
+  }
+
+  body {
+    padding: 10px;
+  }
+
+  .grid {
+    gap: 8px;
+  }
+
+  .info-row {
+    font-size: 13px;
+  }
+
+  .modal-content {
+    width: calc(100% - 20px);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .reroll {
+    width: 100%;
+  }
+
+  /* Make buttons a little taller for touch */
+  button {
+    padding: 10px 12px;
+  }
+}
+
+/* Very small / narrow screens: make grid scrollable horizontally if needed */
+@media (max-width: 360px) {
+  :root {
+    --cell-size: 64px;
+  }
+
+  .grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .grid {
+    grid-auto-flow: column;
+    grid-auto-columns: var(--cell-size);
+    grid-template-rows: none;
+  }
 }
