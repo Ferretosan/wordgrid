@@ -1,6 +1,9 @@
 // Word list
 let WORDS = [];
 
+// Local storage keys
+const DIFFICULTY_KEY = 'wordgrid:difficulty';
+
 // Attempt to load words from URL. Try a gzipped version first, then fall back to plaintext.
 async function loadWordlist() {
   try {
@@ -57,7 +60,7 @@ async function loadWordlist() {
   }
 }
 
-// ---------- Category definitions ----------
+// Category definitions
 const CATEGORIES = [
   {
     id: "starts_vowel",
@@ -145,7 +148,7 @@ const CATEGORIES = [
   },
 ];
 
-// ---------- Game state ----------
+// Game state
 let board = {
   rows: [],
   cols: [],
@@ -160,6 +163,8 @@ let guessesUsed = 0; // no max, increments on every guess attempt
 let guesses = [];
 let score = 0;
 let maxScore = 0;
+// Difficulty: 'normal' | 'hard' | 'expert'
+let difficulty = 'normal';
 // Mode/state: 'infinite' or 'daily'
 // Always start in daily mode (do not persist or read last-selected mode)
 let currentMode = 'daily';
@@ -173,6 +178,9 @@ const dom = {
   guessesInfo: document.getElementById("guessesInfo"),
   scoreInfo: document.getElementById("scoreInfo"),
   rerollBtn: document.getElementById("rerollBtn"),
+  settingsBtn: document.getElementById("settingsBtn"),
+  settingsModal: document.getElementById("settingsModal"),
+  settingsClose: document.getElementById("settingsClose"),
   modeDaily: document.getElementById("modeDaily"),
   modeInfinite: document.getElementById("modeInfinite"),
   countdown: document.getElementById("countdown"),
@@ -188,6 +196,7 @@ const dom = {
   modalGuessBtn: document.getElementById("modalGuessBtn"),
   modalClose: document.getElementById("modalClose"),
   modalCancelBtn: document.getElementById("modalCancelBtn"),
+  difficultyValue: document.getElementById("difficultyValue"),
 };
 
 // Helpers
@@ -287,7 +296,7 @@ function wordRarityScore(word) {
   return Math.round(s * 10);
 }
 
-// ---------- Board builder ----------
+// Board builder
 function buildBoard(rng) {
   const triesMax = 400;
   for (let attempt = 0; attempt < triesMax; attempt++) {
@@ -329,6 +338,7 @@ function buildBoard(rng) {
       board.answers = answers;
       board.revealed = Array.from({ length: 3 }, () => Array(3).fill(false));
       board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
+      board.eliminated = Array.from({ length: 3 }, () => Array(3).fill(false));
       computeBoardHashAndUpdateUI();
       return true;
     }
@@ -370,7 +380,7 @@ function computeMaxScore() {
   maxScore = total + 500; // + completion bonus
 }
 
-// ---------- Daily mode helpers ----------
+// Daily mode helpers
 function getTodayDateStr(d) {
   const now = d ? new Date(d) : new Date();
   const year = now.getFullYear();
@@ -425,6 +435,7 @@ function saveDailyState(dateStr) {
       },
       revealed: board.revealed,
       scores: board.scores,
+      eliminated: board.eliminated,
       guessesUsed,
       guesses,
       score,
@@ -473,6 +484,7 @@ function generateDailyBoardForDate(dateStr) {
       board.revealed = saved.revealed;
       // restore per-cell scores if present, otherwise initialize empty grid
       board.scores = saved.scores || Array.from({ length: 3 }, () => Array(3).fill(null));
+      board.eliminated = saved.eliminated || Array.from({ length: 3 }, () => Array(3).fill(false));
       guessesUsed = saved.guessesUsed || 0;
       guesses = saved.guesses || [];
       score = saved.score || 0;
@@ -484,7 +496,7 @@ function generateDailyBoardForDate(dateStr) {
   return true;
 }
 
-// ---------- Rendering ----------
+// Rendering
 function renderGrid() {
   dom.grid.innerHTML = "";
 
@@ -525,14 +537,24 @@ function renderGrid() {
       if (board.revealed[r][c]) {
         cell.classList.remove("hidden");
         cell.classList.add("revealed");
-        // show the guessed word and the points awarded for that cell (if any)
-        const cellScore = (board.scores && board.scores[r] && board.scores[r][c] != null) ? board.scores[r][c] : null;
-        const scoreHtml = cellScore != null ? `<div class="cell-score">+${cellScore}</div>` : `<div class="cell-score"></div>`;
-        cell.innerHTML = `<div class="word">${board.answers[r][c]}</div>${scoreHtml}`;
-        // Make revealed cells explicitly unfocusable and non-interactive for accessibility
-        cell.tabIndex = -1;
-        cell.setAttribute('aria-disabled', 'true');
-        cell.setAttribute('aria-label', `${rowLabel} + ${colLabel} — ${board.answers[r][c]}. Revealed.`);
+        // eliminated cells (expert mode) show a disabled/ban marker and no score
+        const isElim = board.eliminated && board.eliminated[r] && board.eliminated[r][c];
+        if (isElim) {
+          cell.classList.add('eliminated');
+          cell.innerHTML = `<div class="word"><i class="fa-solid fa-ban eliminated-icon" aria-hidden="true"></i></div>`;
+          cell.tabIndex = -1;
+          cell.setAttribute('aria-disabled', 'true');
+          cell.setAttribute('aria-label', `${rowLabel} + ${colLabel} — eliminated.`);
+        } else {
+          // show the guessed word and the points awarded for that cell (if any)
+          const cellScore = (board.scores && board.scores[r] && board.scores[r][c] != null) ? board.scores[r][c] : null;
+          const scoreHtml = cellScore != null ? `<div class="cell-score">+${cellScore}</div>` : `<div class="cell-score"></div>`;
+          cell.innerHTML = `<div class="word">${board.answers[r][c]}</div>${scoreHtml}`;
+          // Make revealed cells explicitly unfocusable and non-interactive for accessibility
+          cell.tabIndex = -1;
+          cell.setAttribute('aria-disabled', 'true');
+          cell.setAttribute('aria-label', `${rowLabel} + ${colLabel} — ${board.answers[r][c]}. Revealed.`);
+        }
       } else {
         cell.innerHTML = `<div class="word">?</div>`;
         // Make unrevealed cells keyboard accessible and interactive
@@ -556,7 +578,7 @@ function renderGrid() {
   updateStatus();
 }
 
-// ---------- Modal logic ----------
+// Modal logic
 let modalTarget = null; // {r,c}
 
 function openCellModal(r, c) {
@@ -576,6 +598,79 @@ function closeModal() {
   dom.cellModal.classList.add("hidden");
   dom.cellModal.setAttribute("aria-hidden", "true");
 }
+
+// Settings modal handlers (empty dialog for now)
+function openSettingsModal() {
+  if (!dom.settingsModal) return;
+  dom.settingsModal.classList.remove('hidden');
+  dom.settingsModal.setAttribute('aria-hidden', 'false');
+  // ensure UI reflects current selection
+  applyDifficultyToUI();
+  // focus the close button for keyboard users
+  if (dom.settingsClose) dom.settingsClose.focus();
+}
+
+function closeSettingsModal() {
+  if (!dom.settingsModal) return;
+  dom.settingsModal.classList.add('hidden');
+  dom.settingsModal.setAttribute('aria-hidden', 'true');
+}
+
+function applyDifficultyToUI() {
+  if (dom.difficultyValue) dom.difficultyValue.textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1) + ' Mode';
+  // update option buttons
+  const opts = document.querySelectorAll('.difficulty-option');
+  opts.forEach((el) => {
+    const m = el.dataset.mode;
+    const sel = (m === difficulty);
+    el.classList.toggle('selected', sel);
+    el.setAttribute('aria-checked', sel ? 'true' : 'false');
+  });
+}
+
+function setDifficulty(mode, save = true) {
+  if (!mode) return;
+  if (!['normal', 'hard', 'expert'].includes(mode)) return;
+  difficulty = mode;
+  if (save) localStorage.setItem(DIFFICULTY_KEY, difficulty);
+  applyDifficultyToUI();
+}
+
+// wire difficulty option clicks with confirm that changing difficulty clears the board
+async function clearBoard() {
+  // clear revealed flags, scores, eliminated flags, guesses and score
+  board.revealed = Array.from({ length: 3 }, () => Array(3).fill(false));
+  board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
+  board.eliminated = Array.from({ length: 3 }, () => Array(3).fill(false));
+  guessesUsed = 0;
+  guesses = [];
+  score = 0;
+  // persist if daily
+  if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayDateStr());
+  renderGrid();
+  updateStatus();
+}
+
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest && ev.target.closest('.difficulty-option');
+  if (!btn) return;
+  const m = btn.dataset.mode;
+  if (!m) return;
+  if (m === difficulty) {
+    // already selected; just close settings UI
+    applyDifficultyToUI();
+    return;
+  }
+  const ok = await showConfirm('Changing the difficulty will reset the board. Do you want to continue?');
+  if (!ok) {
+    // re-sync UI to current difficulty
+    applyDifficultyToUI();
+    return;
+  }
+  // user confirmed: apply difficulty, persist, and clear the board (do not reroll)
+  setDifficulty(m, true);
+  await clearBoard();
+});
 
 // Custom message / confirm dialogs (replace alert/confirm)
 function showAlert(message) {
@@ -642,67 +737,115 @@ async function submitGuessForModal() {
     raw: valRaw,
     normalized: guessNorm,
   };
-
-  // the guessed text must exist in the WORDS list
+  // the guessed text may or may not exist in the WORDS list
   const matchedWord = WORDS.find((w) => normalize(w) === guessNorm);
-  if (!matchedWord) {
+
+  // determine duplicates across the board (excluding current cell)
+  const used = new Set(board.answers.flat().filter(Boolean).map((w) => normalize(w)));
+  if (board.answers[r][c]) used.delete(normalize(board.answers[r][c]));
+  const isDuplicate = used.has(guessNorm);
+
+  const HARD_PENALTY = 50; // points deducted on hard mode for invalid attempts
+
+  // Behavior by difficulty
+  if (difficulty === 'normal') {
+    // Strict: reject non-wordlist and duplicates
+    if (!matchedWord) {
+      attempt.valid = false;
+      attempt.reason = 'not_in_wordlist';
+      guesses.push(attempt);
+      if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayDateStr());
+      updateStatus();
+      await showAlert("That word is not in the word list.");
+      return;
+    }
+    if (isDuplicate) {
+      attempt.valid = false;
+      attempt.reason = 'duplicate';
+      guesses.push(attempt);
+      if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayDateStr());
+      updateStatus();
+      await showAlert(`That word is already used in another cell.`);
+      return;
+    }
+  }
+
+  // If we get here, either the guess is valid per normal rules, or difficulty allows handling
+  // Expert mode: incorrect or duplicate -> eliminate the cell (no score)
+  if (difficulty === 'expert' && (!matchedWord || isDuplicate)) {
+    attempt.valid = false;
+    attempt.reason = (!matchedWord) ? 'not_in_wordlist' : 'duplicate';
+    guesses.push(attempt);
+    // mark cell eliminated and revealed with no score
+    if (!board.eliminated) board.eliminated = Array.from({ length: 3 }, () => Array(3).fill(false));
+    board.revealed[r][c] = true;
+    board.eliminated[r][c] = true;
+    if (!board.scores) board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
+    board.scores[r][c] = 0;
+    renderGrid();
+    closeModal();
+    if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayDateStr());
+    updateStatus();
+    await showAlert('Cell eliminated due to incorrect or duplicate guess.');
+    return;
+  }
+
+  // Hard mode: incorrect words are rejected (same message as normal) but still apply a penalty.
+  if (difficulty === 'hard' && !matchedWord) {
     attempt.valid = false;
     attempt.reason = 'not_in_wordlist';
     guesses.push(attempt);
+    // apply penalty even though the guess is rejected
+    score -= HARD_PENALTY;
     if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayDateStr());
     updateStatus();
     await showAlert("That word is not in the word list.");
     return;
   }
-  const acceptedWord = matchedWord;
 
-  // prevent duplicates across the board
-  const used = new Set(board.answers.flat().filter(Boolean).map((w) => normalize(w)));
-  if (board.answers[r][c]) used.delete(normalize(board.answers[r][c]));
-  if (used.has(guessNorm)) {
-    // still counts as a guess but reject duplicate placement
+  // Hard mode: duplicate guesses are rejected (same alert as normal) but still apply a penalty.
+  if (difficulty === 'hard' && isDuplicate) {
     attempt.valid = false;
     attempt.reason = 'duplicate';
     guesses.push(attempt);
+    // apply penalty even though the guess is rejected
+    score -= HARD_PENALTY;
     if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayDateStr());
     updateStatus();
     await showAlert(`That word is already used in another cell.`);
     return;
   }
 
-  // Accept the guess regardless of whether it fits the cell tests (but it must be in WORDS)
+  // Otherwise it's a valid accepted guess (matchedWord exists and not duplicate, or allowed case)
+  const acceptedWord = matchedWord || valRaw;
   board.answers[r][c] = acceptedWord;
   board.revealed[r][c] = true;
 
-  // scoring: rarity-based, then scaled by candidate scarcity
+  // scoring: rarity-based, then scaled by candidate scarcity (only meaningful for real words)
   const rarity = wordRarityScore(acceptedWord);
-  // how many words actually fit the row/col conditions for this cell
   const rowTest = board.rows[r].test;
   const colTest = board.cols[c].test;
   const candidateCount = WORDS.filter((w) => rowTest(w) && colTest(w)).length || 1;
   const candidateFactor = Math.max(1, 6 / candidateCount);
   let points = Math.max(10, Math.round(rarity));
   points = Math.round(points * candidateFactor);
-  // record result of this attempt
   attempt.valid = true;
   attempt.acceptedWord = acceptedWord;
   attempt.points = points;
   guesses.push(attempt);
-  // store awarded points for this cell so it can be displayed
   if (!board.scores) board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
   board.scores[r][c] = points;
   score += points;
   renderGrid();
   closeModal();
   updateStatus();
-  // persist daily progress
   if (currentMode === 'daily') {
     saveDailyState(currentBoardId || getTodayDateStr());
   }
   checkBoardComplete();
 }
 
-// ---------- Game flow helpers ----------
+// Game flow helpers
 function updateStatus() {
   // show score and guesses in the sidebar
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
@@ -715,6 +858,7 @@ function updateSidebar() {
   dom.guessesInfo.textContent = `${guessesUsed} guesses`;
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
   dom.scoreInfo.textContent = `${score} / ${maxScore} (${pct}%)`;
+  if (dom.difficultyValue) dom.difficultyValue.textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1) + ' Mode';
 }
 
 function checkBoardComplete() {
@@ -752,7 +896,7 @@ function revealAll() {
   updateStatus();
 }
 
-// ---------- Event wiring ----------
+// Event wiring
 dom.rerollBtn.addEventListener("click", async () => {
   if (currentMode === 'daily') {
     await showAlert('Reroll is disabled in Daily mode.');
@@ -769,8 +913,15 @@ dom.modalCancelBtn.addEventListener("click", closeModal);
 dom.cellModal.addEventListener("click", (ev) => {
   if (ev.target === dom.cellModal) closeModal();
 });
+// Settings button wiring
+if (dom.settingsBtn) dom.settingsBtn.addEventListener('click', openSettingsModal);
+if (dom.settingsClose) dom.settingsClose.addEventListener('click', closeSettingsModal);
+if (dom.settingsModal) dom.settingsModal.addEventListener('click', (ev) => { if (ev.target === dom.settingsModal) closeSettingsModal(); });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeModal();
+  if (e.key === "Escape") {
+    closeModal();
+    closeSettingsModal();
+  }
   // If Enter is pressed while the modal is open, prefer the input-specific handler
   // so we can prevent duplicate/dropped events. If the input is focused, skip here.
   if (e.key === "Enter" && !dom.cellModal.classList.contains("hidden")) {
@@ -833,9 +984,20 @@ function setMode(mode) {
 if (dom.modeDaily) dom.modeDaily.addEventListener('click', () => setMode('daily'));
 if (dom.modeInfinite) dom.modeInfinite.addEventListener('click', () => setMode('infinite'));
 
-// ---------- Init ----------
+// Init
 (async function init() {
   await loadWordlist();
+  // load persisted difficulty selection
+  try {
+    const stored = localStorage.getItem(DIFFICULTY_KEY);
+    if (stored && ['normal', 'hard', 'expert'].includes(stored)) {
+      setDifficulty(stored, false);
+    } else {
+      setDifficulty(difficulty, false);
+    }
+  } catch (e) {
+    // ignore
+  }
   // initialize according to saved mode
   setMode(currentMode || 'infinite');
 })();
