@@ -456,9 +456,7 @@ function renderGrid() {
     ch.className = "col-header";
     const col = board.cols[c];
     ch.innerHTML = `<strong>${col.label}</strong>`;
-    ch.addEventListener("click", () =>
-      showAlert(`${col.label}\n\nExamples: ${col.examples.join(", ")}`),
-    );
+    // Headers are no longer interactive — clicking should not open alerts.
     dom.grid.appendChild(ch);
   }
 
@@ -469,9 +467,7 @@ function renderGrid() {
     rh.className = "row-header";
     const row = board.rows[r];
     rh.innerHTML = `<strong>${row.label}</strong>`;
-    rh.addEventListener("click", () =>
-      showAlert(`${row.label}\n\nExamples: ${row.examples.join(", ")}`),
-    );
+    // Row headers are non-interactive now.
     dom.grid.appendChild(rh);
 
     // cells
