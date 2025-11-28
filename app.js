@@ -701,14 +701,16 @@ async function submitGuessForModal() {
 // ---------- Game flow helpers ----------
 function updateStatus() {
   // show score and guesses in the sidebar
-  dom.scoreInfo.textContent = `${score} / ${maxScore}`;
+  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  dom.scoreInfo.textContent = `${score} / ${maxScore} (${pct}%)`;
   dom.guessesInfo.textContent = `${guessesUsed} guesses`;
 }
 
 function updateSidebar() {
   // ensure sidebar values reflect current state
   dom.guessesInfo.textContent = `${guessesUsed} guesses`;
-  dom.scoreInfo.textContent = `${score} / ${maxScore}`;
+  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  dom.scoreInfo.textContent = `${score} / ${maxScore} (${pct}%)`;
 }
 
 function checkBoardComplete() {
