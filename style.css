@@ -159,6 +159,24 @@ main {
   margin-top: 8px;
 }
 
+/* Per-cell awarded points shown under the revealed word */
+.cell-score {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 6px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.cell.revealed .cell-score {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.08);
+}
+
 .cell.hidden {
   filter: brightness(0.9);
   cursor: pointer;

@@ -151,9 +151,13 @@ let board = {
   cols: [],
   answers: [],
   revealed: [],
+  // per-cell points awarded when that cell was guessed (null/number)
+  scores: [],
 };
 
 let guessesUsed = 0; // no max, increments on every guess attempt
+// record of every guess attempt (timestamped). Each entry: {time, r, c, raw, normalized, valid, reason, acceptedWord, points}
+let guesses = [];
 let score = 0;
 let maxScore = 0;
 // Mode/state: 'infinite' or 'daily'
@@ -324,6 +328,7 @@ function buildBoard(rng) {
       board.cols = cols;
       board.answers = answers;
       board.revealed = Array.from({ length: 3 }, () => Array(3).fill(false));
+      board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
       computeBoardHashAndUpdateUI();
       return true;
     }
@@ -348,8 +353,6 @@ async function computeBoardHashAndUpdateUI() {
 // compute the maximum attainable score for the current board
 function computeMaxScore() {
   let total = 0;
-  const assumedGuessesUsed = 0; // assume ideal minimal guesses to maximize multipliers
-  const assumedMultiplier = 1 + Math.max(0, (10 - assumedGuessesUsed) / 10);
   for (let r = 0; r < 3; r++) {
     for (let c = 0; c < 3; c++) {
       const rowTest = board.rows[r].test;
@@ -359,12 +362,12 @@ function computeMaxScore() {
       const maxRarity = candidates.length
         ? Math.max(...candidates.map((w) => wordRarityScore(w)))
         : wordRarityScore(board.answers[r][c] || "");
-      const base = Math.max(10, Math.round(maxRarity * assumedMultiplier));
+      const base = Math.max(10, Math.round(maxRarity));
       const candidateFactor = Math.max(1, 6 / candidateCount);
       total += Math.round(base * candidateFactor);
     }
   }
-  maxScore = total;
+  maxScore = total + 500; // + completion bonus
 }
 
 // ---------- Daily mode helpers ----------
@@ -417,7 +420,9 @@ function saveDailyState(dateStr) {
         answers: board.answers,
       },
       revealed: board.revealed,
+      scores: board.scores,
       guessesUsed,
+      guesses,
       score,
       maxScore,
       savedAt: new Date().toISOString(),
@@ -462,7 +467,10 @@ function generateDailyBoardForDate(dateStr) {
       board.cols = cols;
       board.answers = saved.board.answers;
       board.revealed = saved.revealed;
+      // restore per-cell scores if present, otherwise initialize empty grid
+      board.scores = saved.scores || Array.from({ length: 3 }, () => Array(3).fill(null));
       guessesUsed = saved.guessesUsed || 0;
+      guesses = saved.guesses || [];
       score = saved.score || 0;
       maxScore = saved.maxScore || maxScore;
     } catch (e) {
@@ -513,8 +521,10 @@ function renderGrid() {
       if (board.revealed[r][c]) {
         cell.classList.remove("hidden");
         cell.classList.add("revealed");
-        // show only the guessed word; remove the small meta text under the word
-        cell.innerHTML = `<div class="word">${board.answers[r][c]}</div>`;
+        // show the guessed word and the points awarded for that cell (if any)
+        const cellScore = (board.scores && board.scores[r] && board.scores[r][c] != null) ? board.scores[r][c] : null;
+        const scoreHtml = cellScore != null ? `<div class="cell-score">+${cellScore}</div>` : `<div class="cell-score"></div>`;
+        cell.innerHTML = `<div class="word">${board.answers[r][c]}</div>${scoreHtml}`;
         // Make revealed cells explicitly unfocusable and non-interactive for accessibility
         cell.tabIndex = -1;
         cell.setAttribute('aria-disabled', 'true');
@@ -524,7 +534,7 @@ function renderGrid() {
         // Make unrevealed cells keyboard accessible and interactive
         cell.tabIndex = 0;
         cell.setAttribute('role', 'button');
-        cell.setAttribute('aria-label', `${rowLabel} + ${colLabel} — hidden. Press Enter or Space to guess.`);
+        cell.setAttribute('aria-label', `${rowLabel} + ${colLabel} - hidden. Press Enter or Space to guess.`);
         // Click handler for pointer users
         cell.addEventListener("click", () => openCellModal(r, c));
         // Keyboard activation for Enter and Space
@@ -608,9 +618,6 @@ function showConfirm(message) {
   });
 }
 
-// suggestions words for the cell and prefix
-// suggestions removed: no suggestion UI or helper functions
-
 // submit a guess for the modal's target cell
 async function submitGuessForModal() {
   if (!modalTarget) return;
@@ -620,26 +627,40 @@ async function submitGuessForModal() {
   guessesUsed++;
   const r = modalTarget.r,
     c = modalTarget.c;
-
   const normalize = (s) => String(s).toLowerCase().replace(/[^a-z]/g, "");
   const guessNorm = normalize(valRaw);
+
+  // record this attempt (we'll augment with result below)
+  const attempt = {
+    time: new Date().toISOString(),
+    r,
+    c,
+    raw: valRaw,
+    normalized: guessNorm,
+  };
 
   // the guessed text must exist in the WORDS list
   const matchedWord = WORDS.find((w) => normalize(w) === guessNorm);
   if (!matchedWord) {
-    score = Math.max(0, score - 3);
+    attempt.valid = false;
+    attempt.reason = 'not_in_wordlist';
+    guesses.push(attempt);
+    if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayUTCDateStr());
     updateStatus();
     await showAlert("That word is not in the word list.");
     return;
   }
   const acceptedWord = matchedWord;
 
-  // prevent duplicates across the board (except replacing current cell)
+  // prevent duplicates across the board
   const used = new Set(board.answers.flat().filter(Boolean).map((w) => normalize(w)));
   if (board.answers[r][c]) used.delete(normalize(board.answers[r][c]));
   if (used.has(guessNorm)) {
     // still counts as a guess but reject duplicate placement
-    score = Math.max(0, score - 3);
+    attempt.valid = false;
+    attempt.reason = 'duplicate';
+    guesses.push(attempt);
+    if (currentMode === 'daily') saveDailyState(currentBoardId || getTodayUTCDateStr());
     updateStatus();
     await showAlert(`That word is already used in another cell.`);
     return;
@@ -651,14 +672,21 @@ async function submitGuessForModal() {
 
   // scoring: rarity-based, then scaled by candidate scarcity
   const rarity = wordRarityScore(acceptedWord);
-  const multiplier = 1 + Math.max(0, (10 - guessesUsed) / 10);
   // how many words actually fit the row/col conditions for this cell
   const rowTest = board.rows[r].test;
   const colTest = board.cols[c].test;
   const candidateCount = WORDS.filter((w) => rowTest(w) && colTest(w)).length || 1;
   const candidateFactor = Math.max(1, 6 / candidateCount);
-  let points = Math.max(10, Math.round(rarity * multiplier));
+  let points = Math.max(10, Math.round(rarity));
   points = Math.round(points * candidateFactor);
+  // record result of this attempt
+  attempt.valid = true;
+  attempt.acceptedWord = acceptedWord;
+  attempt.points = points;
+  guesses.push(attempt);
+  // store awarded points for this cell so it can be displayed
+  if (!board.scores) board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
+  board.scores[r][c] = points;
   score += points;
   renderGrid();
   closeModal();
@@ -686,9 +714,8 @@ function updateSidebar() {
 function checkBoardComplete() {
   const all = board.revealed.flat().every(Boolean);
   if (all) {
-    // completion bonus: bigger if fewer guesses used
-    const bonusMultiplier = 1 + Math.max(0, (12 - guessesUsed) / 12); // ranges ~2 -> 1
-    const bonus = Math.round(500 * bonusMultiplier);
+    // completion bonus
+    const bonus = Math.round(500);
     score += bonus;
     updateStatus();
     setTimeout(() => showAlert(`Board complete! Bonus ${bonus} points awarded. Final score: ${score}`), 80);
@@ -705,6 +732,7 @@ function newBoard() {
     return;
   }
   guessesUsed = 0;
+  guesses = [];
   score = 0;
   renderGrid();
   updateStatus();
@@ -737,9 +765,24 @@ dom.cellModal.addEventListener("click", (ev) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeModal();
-  if (e.key === "Enter" && !dom.cellModal.classList.contains("hidden"))
+  // If Enter is pressed while the modal is open, prefer the input-specific handler
+  // so we can prevent duplicate/dropped events. If the input is focused, skip here.
+  if (e.key === "Enter" && !dom.cellModal.classList.contains("hidden")) {
+    if (document.activeElement === dom.modalInput) return;
     submitGuessForModal();
+  }
 });
+
+// Ensure pressing Enter inside the modal input submits the guess reliably
+if (dom.modalInput) {
+  dom.modalInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      submitGuessForModal();
+    }
+  });
+}
 
 function setMode(mode) {
   if (mode !== 'daily' && mode !== 'infinite') return;
