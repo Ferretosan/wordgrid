@@ -5,7 +5,7 @@ let WORDS = [];
 const DIFFICULTY_KEY = 'wordgrid:difficulty';
 
 // API base URL
-const API_URL = 'http://localhost:5000'; // adjust as needed for deployment
+const API_URL = 'https://wordgrid-api.proplayer919.dev:7000'; // adjust as needed for deployment
 
 // Attempt to load words from URL. Try a gzipped version first, then fall back to plaintext.
 async function loadWordlist() {
