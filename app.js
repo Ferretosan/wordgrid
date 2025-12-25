@@ -1206,7 +1206,8 @@ if (dom.modalInput) {
 function hasPartialProgress() {
   if (!board.revealed || board.revealed.length === 0) return false;
   const revealedCount = board.revealed.flat().filter(Boolean).length;
-  const totalCells = board.revealed.length * (board.revealed[0]?.length || 0);
+  // Board is always 3x3 in this game
+  const totalCells = 9;
   return revealedCount > 0 && revealedCount < totalCells;
 }
 
@@ -1253,7 +1254,9 @@ function setMode(mode) {
         const cols = saved.board.cols.map((id) => CATEGORIES.find((c) => c.id === id));
         // Validate that all categories were found
         if (rows.some((r) => !r) || cols.some((c) => !c)) {
-          throw new Error('Some categories could not be found');
+          const missingRows = saved.board.rows.filter((id) => !CATEGORIES.find((c) => c.id === id));
+          const missingCols = saved.board.cols.filter((id) => !CATEGORIES.find((c) => c.id === id));
+          throw new Error(`Missing categories - rows: [${missingRows.join(', ')}], cols: [${missingCols.join(', ')}]`);
         }
         board.rows = rows;
         board.cols = cols;
@@ -1298,8 +1301,9 @@ if (dom.modeInfinite) dom.modeInfinite.addEventListener('click', () => setMode('
 function handleBeforeUnload(e) {
   if (currentMode === 'infinite' && hasPartialProgress()) {
     e.preventDefault();
+    // Modern browsers ignore custom messages for security reasons and show a generic message
     e.returnValue = ''; // Required for Chrome
-    return ''; // For some browsers
+    return ''; // For legacy browsers
   }
 }
 
