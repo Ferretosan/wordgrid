@@ -5,8 +5,14 @@ let WORDS = [];
 const DIFFICULTY_KEY = 'wordgrid:difficulty';
 const INFINITE_BOARD_KEY = 'wordgrid:infinite:current';
 
+function dailyStorageKey(dateStr) {
+  return `wordgrid:daily:${dateStr}`;
+}
+
 // API base URL
-const API_URL = 'https://wordgrid-api.proplayer919.dev:7000'; // adjust as needed for deployment
+const API_URL = 'https://wordgrid-api.proplayer919.dev:7000';
+
+const CHEAT_CODE = '!opensesame';
 
 // Attempt to load words from URL. Try a gzipped version first, then fall back to plaintext.
 async function loadWordlist() {
@@ -143,6 +149,8 @@ let difficulty = 'normal';
 let currentMode = 'daily';
 let currentBoardId = null; // for daily: YYYY-MM-DD, for infinite: hash
 let countdownTimer = null;
+
+let cheatMode = false; // flag to allow score manipulation for testing
 
 // DOM refs
 const dom = {
@@ -414,10 +422,6 @@ function formatMs(ms) {
   return `${h}:${m}:${s}`;
 }
 
-function dailyStorageKey(dateStr) {
-  return `wordgrid:daily:${dateStr}`;
-}
-
 function saveDailyState(dateStr) {
   try {
     const payload = {
@@ -645,7 +649,6 @@ function openCellModal(r, c) {
   dom.cellModal.classList.remove("hidden");
   dom.cellModal.setAttribute("aria-hidden", "false");
   dom.modalInput.focus();
-  // suggestions removed; input is simple free-text
 }
 
 function closeModal() {
@@ -654,7 +657,7 @@ function closeModal() {
   dom.cellModal.setAttribute("aria-hidden", "true");
 }
 
-// Settings modal handlers (empty dialog for now)
+// Settings modal handlers
 function openSettingsModal() {
   if (!dom.settingsModal) return;
   dom.settingsModal.classList.remove('hidden');
@@ -737,7 +740,7 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
-// Custom message / confirm dialogs (replace alert/confirm)
+// Custom message / confirm dialogs
 function showAlert(message) {
   return new Promise((resolve) => {
     const mm = dom.messageModal;
@@ -902,6 +905,54 @@ async function submitGuessForModal() {
   if (!modalTarget) return;
   const valRaw = dom.modalInput.value.trim();
   if (!valRaw) return;
+
+  // check if this guess activates cheat mode
+  if (valRaw.toLowerCase() === CHEAT_CODE) {
+    cheatMode = true;
+    closeModal();
+    return;
+  }
+
+  // check if cheat mode is active and the guess is a command
+  if (cheatMode) {
+    if (valRaw.toLowerCase() === '!reveal') {
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          board.revealed[r][c] = true;
+
+          let best = board.answers[r][c];
+          let bestScore = wordRarityScore(best);
+
+          board.scores[r][c] = bestScore;
+          renderGrid();
+          closeModal();
+          updateStatus();
+          saveCurrentState();
+        }
+      }
+      return;
+    }
+
+    const cheatMatch = valRaw.match(/^!(\d+)$/);
+    if (cheatMatch) {
+      const forcedScore = parseInt(cheatMatch[1], 10);
+      if (!isNaN(forcedScore) && forcedScore >= 0) {
+        const r = modalTarget.r, c = modalTarget.c;
+        board.revealed[r][c] = true;
+        if (!board.scores) board.scores = Array.from({ length: 3 }, () => Array(3).fill(null));
+        board.scores[r][c] = forcedScore;
+        board.answers[r][c] = forcedScore.toString();
+        score += forcedScore;
+        renderGrid();
+        closeModal();
+        updateStatus();
+        saveCurrentState();
+        checkBoardComplete();
+        return;
+      }
+    }
+  }
+
   // every attempt counts as one guess used
   guessesUsed++;
   const r = modalTarget.r,
@@ -1012,7 +1063,7 @@ async function submitGuessForModal() {
     score -= HARD_PENALTY;
     saveCurrentState();
     updateStatus();
-    await showAlert("That word is not in the word list.");
+    await showAlert("That word is not in the word list. Penalty of -" + HARD_PENALTY + " points applied.");
     return;
   }
 
@@ -1024,7 +1075,7 @@ async function submitGuessForModal() {
     score -= HARD_PENALTY;
     saveCurrentState();
     updateStatus();
-    await showAlert("That word doesn't satisfy the row and column conditions.");
+    await showAlert("That word doesn't satisfy the row and column conditions. Penalty of -" + HARD_PENALTY + " points applied.");
     return;
   }
 
@@ -1037,7 +1088,7 @@ async function submitGuessForModal() {
     score -= HARD_PENALTY;
     saveCurrentState();
     updateStatus();
-    await showAlert(`That word is already used in another cell.`);
+    await showAlert(`That word is already used in another cell. Penalty of -` + HARD_PENALTY + ` points applied.`);
     return;
   }
 
