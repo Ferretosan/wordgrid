@@ -33,18 +33,6 @@ function getInfiniteSeedFromUrl(): number | null {
   return seedString ? parseSeedString(seedString.toLowerCase()) : null;
 }
 
-function updateBoardUrl(mode: GameMode, seedString?: string): void {
-  if (globalThis.window === undefined) return;
-  const url = new URL(globalThis.window.location.href);
-  url.searchParams.set('mode', mode);
-  if (mode === 'infinite' && seedString) {
-    url.searchParams.set('seed', seedString);
-  } else {
-    url.searchParams.delete('seed');
-  }
-  globalThis.window.history.replaceState({}, '', url.toString());
-}
-
 function buildShareLink(seedString: string): string {
   const url = new URL(globalThis.window.location.href);
   url.searchParams.set('mode', 'infinite');
@@ -141,15 +129,12 @@ function App() {
     setBoard(nextBoard);
     if (nextBoard.boardGameMode === 'daily') {
       saveDailyBoard(nextBoard);
-      updateBoardUrl('daily');
       return;
     }
+
     if (nextBoard.guessedWords.length > 0 || persistEmptyInfinite) {
       saveInfiniteBoard(nextBoard);
-      updateBoardUrl('infinite', nextBoard.seedString);
-      return;
     }
-    updateBoardUrl('infinite');
   };
 
   const loadBoard = (gameMode: GameMode) => {
@@ -157,21 +142,25 @@ function App() {
       const savedBoard = loadDailyBoard();
       if (savedBoard) {
         setBoard(savedBoard);
-        updateBoardUrl('daily');
         return;
       }
     } else {
       const savedBoard = loadInfiniteBoard();
       const sharedSeed = getInfiniteSeedFromUrl();
-      if (savedBoard) {
+
+      if (sharedSeed && savedBoard?.seed === sharedSeed) {
         setBoard(savedBoard);
-        updateBoardUrl('infinite', savedBoard.seedString);
         return;
       }
+
       if (sharedSeed) {
         const sharedBoard = new Board(sharedSeed, 'infinite', TIME_CONFIGS.unlimited);
         setBoard(sharedBoard);
-        updateBoardUrl('infinite', sharedBoard.seedString);
+        return;
+      }
+
+      if (savedBoard) {
+        setBoard(savedBoard);
         return;
       }
     }
@@ -182,7 +171,6 @@ function App() {
         : createSeedFromString(`${Date.now()}-${Math.random()}`);
     const newBoard = new Board(seed, gameMode, TIME_CONFIGS.unlimited);
     setBoard(newBoard);
-    updateBoardUrl(gameMode, gameMode === 'infinite' ? newBoard.seedString : undefined);
     if (gameMode === 'daily') saveDailyBoard(newBoard);
   };
 
@@ -371,15 +359,7 @@ function App() {
             dailyCountdown={dailyCountdown}
             puzzleFinished={!!board?.endedAt}
             setMode={setMode}
-            setSeedHidden={value => {
-              setSeedHidden(value);
-
-              if (value && board?.boardGameMode === 'infinite') {
-                updateBoardUrl('infinite');
-              } else if (!value && board?.boardGameMode === 'infinite') {
-                updateBoardUrl('infinite', board.seedString);
-              }
-            }}
+            setSeedHidden={setSeedHidden}
             enterNormalMode={() => setAnalysisMode(false)}
             enterAnalysisMode={() => setAnalysisMode(true)}
             copyShareLink={copyShareLink}
