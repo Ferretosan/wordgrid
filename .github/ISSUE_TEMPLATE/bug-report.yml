@@ -72,6 +72,10 @@ body:
     id: additional-context
     attributes:
       label: Additional context
-      description: Add any other context or upload screenshots about the problem here.
+      description: Add any other context about the problem here.
     validations:
       required: false
+  - type: markdown
+    attributes:
+      value: |
+        Please attach any relevant screenshots, logs, or other files that may help us understand and resolve the issue. You can drag and drop files into this issue.

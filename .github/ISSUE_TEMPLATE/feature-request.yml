@@ -51,6 +51,10 @@ body:
     id: additional-context
     attributes:
       label: Additional context
-      description: Add any other context or screenshots about the feature request here.
+      description: Add any other context about the feature request here.
     validations:
       required: false
+  - type: markdown
+    attributes:
+      value: |
+        Please attach any relevant screenshots, logs, or other files that may help us implement the feature. You can drag and drop files into this issue.
