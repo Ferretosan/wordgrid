@@ -44,58 +44,17 @@ export class Puzzle {
 
   constructor(seed: number) {
     const genStart = performance.now();
-
     this.seed = seed;
 
     const random = mulberry32(seed);
-    const conditionPool: Condition[] = pickRandom(CONDITIONS, random, 6);
 
+    const conditionPool: Condition[] = pickRandom(CONDITIONS, random, 6);
     this.rows = conditionPool.slice(0, 3);
     this.columns = conditionPool.slice(3, 6);
 
-    const bestWords = new Set<string>();
+    this.#resolveConditionConflicts(random);
 
-    this.grid = Array.from({ length: 3 }, (_, row) =>
-      Array.from({ length: 3 }, (_, col) => {
-        let rowCondition = this.rows[row]!;
-        let colCondition = this.columns[col]!;
-
-        const cell: Cell = { row, col, rowCondition, colCondition, bestWord: '', bestScore: 0 };
-
-        let validWords = Puzzle.getValidWordsForConditions(rowCondition, colCondition);
-
-        while (validWords.length === 0) {
-          const excludedConditions = [
-            ...this.rows.filter((_, idx) => idx !== row),
-            ...this.columns.filter((_, idx) => idx !== col),
-          ];
-
-          if (random() < 0.5) {
-            this.rows[row] = Puzzle.#pickUniqueCondition(random, excludedConditions);
-          } else {
-            this.columns[col] = Puzzle.#pickUniqueCondition(random, excludedConditions);
-          }
-
-          rowCondition = this.rows[row]!;
-          colCondition = this.columns[col]!;
-
-          cell.rowCondition = rowCondition;
-          cell.colCondition = colCondition;
-
-          validWords = Puzzle.getValidWordsForConditions(rowCondition, colCondition);
-        }
-
-        const fallbackWords = validWords.filter(word => !bestWords.has(word));
-
-        cell.bestWord = Puzzle.getBestWordForCell(cell, fallbackWords) || '';
-        cell.bestScore = cell.bestWord ? scoreWord(cell.bestWord, fallbackWords) : 0;
-        bestWords.add(cell.bestWord);
-
-        validWords.forEach(word => this.totalValidWords.add(word));
-
-        return cell;
-      })
-    );
+    this.grid = this.#generateGrid();
 
     this.maxScore = this.grid.flat().reduce((sum, cell) => sum + cell.bestScore, 0);
     this.difficultyRating = this.calculateDifficultyRating();
@@ -103,14 +62,74 @@ export class Puzzle {
     Puzzle.#recordBoardGenTime(performance.now() - genStart);
   }
 
+  #resolveConditionConflicts(random: () => number): void {
+    let attemptsRemaining = 100;
+
+    while (attemptsRemaining-- > 0) {
+      let conflictFound = false;
+
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          const validWords = Puzzle.getValidWordsForConditions(this.rows[row]!, this.columns[col]!);
+
+          if (validWords.length === 0) {
+            this.#mutateConflictingCondition(row, col, random);
+            conflictFound = true;
+            break;
+          }
+        }
+        if (conflictFound) break;
+      }
+
+      if (!conflictFound) return;
+    }
+
+    throw new Error('Failed to resolve grid condition conflicts after maximum attempts.');
+  }
+
+  #mutateConflictingCondition(row: number, col: number, random: () => number): void {
+    const excludedConditions = [
+      ...this.rows.filter((_, idx) => idx !== row),
+      ...this.columns.filter((_, idx) => idx !== col),
+    ];
+
+    if (random() < 0.5) {
+      this.rows[row] = Puzzle.#pickUniqueCondition(random, excludedConditions);
+    } else {
+      this.columns[col] = Puzzle.#pickUniqueCondition(random, excludedConditions);
+    }
+  }
+
+  #generateGrid(): Cell[][] {
+    const bestWords = new Set<string>();
+
+    return Array.from({ length: 3 }, (_, row) =>
+      Array.from({ length: 3 }, (_, col) => {
+        const rowCondition = this.rows[row]!;
+        const colCondition = this.columns[col]!;
+
+        const cell: Cell = { row, col, rowCondition, colCondition, bestWord: '', bestScore: 0 };
+        const validWords = Puzzle.getValidWordsForConditions(rowCondition, colCondition);
+
+        const fallbackWords = validWords.filter(word => !bestWords.has(word));
+
+        cell.bestWord = Puzzle.getBestWordForCell(cell, fallbackWords) || '';
+        cell.bestScore = cell.bestWord ? scoreWord(cell.bestWord, fallbackWords) : 0;
+
+        bestWords.add(cell.bestWord);
+        validWords.forEach(word => this.totalValidWords.add(word));
+
+        return cell;
+      })
+    );
+  }
+
   calculateDifficultyRating(): number {
     const baseRating = 1200;
-
     const scoreFactor = Math.log10(this.maxScore + 1) * 100;
     const vocabDensityFactor = Math.log10(this.totalValidWords.size + 1) * 50;
 
     const difficultyRating = Math.round(baseRating + scoreFactor - vocabDensityFactor);
-
     return Math.min(Math.max(difficultyRating, 600), 2600);
   }
 
