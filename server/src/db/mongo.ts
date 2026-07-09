@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
-import { createLogger } from './logging';
-import { MONGODB_URI } from './env';
+import { createLogger } from '../logging';
+import { MONGODB_URI } from '../env';
 
 const logger = createLogger('MongoClient');
 

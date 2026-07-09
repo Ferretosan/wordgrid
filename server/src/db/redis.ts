@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
-import { createLogger } from './logging';
-import { REDIS_HOST, REDIS_PORT } from './env';
+import { createLogger } from '../logging';
+import { REDIS_HOST, REDIS_PORT } from '../env';
 
 const logger = createLogger('RedisClient');
 

@@ -1,11 +1,11 @@
-import redis from '../redis';
+import redis from '../db/redis';
 
 const QUEUE_KEY = 'matchmaking:queue';
 
 export type Match = {
   playerA: string;
   playerB: string;
-}
+};
 
 export class Matchmaker {
   /**
