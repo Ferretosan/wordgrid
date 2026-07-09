@@ -7,9 +7,7 @@
   <p style="margin: 0; font-size: 18px; text-align: center;">A grid-based puzzle game to test your vocabulary</p>
 
   <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
-    <a href="https://app.netlify.com/projects/wordgridgame/deploys" style="height: 20px;">
-      <img height="20" src="https://api.netlify.com/api/v1/badges/ae1f19af-4ebb-4756-82e7-28a3cd5f5dd3/deploy-status" alt="Netlify Status" style="height: 20px; width: auto;">
-    </a>
+    <img height="20" src="https://api.netlify.com/api/v1/badges/ae1f19af-4ebb-4756-82e7-28a3cd5f5dd3/deploy-status" alt="Netlify Status" style="height: 20px; width: auto;">
     <img height="20" src="https://img.shields.io/github/repo-size/wordgrid-game/wordgrid" alt="GitHub repo size" style="height: 20px; width: auto;">
     <img height="20" src="https://img.shields.io/github/issues/wordgrid-game/wordgrid" alt="GitHub Issues" style="height: 20px; width: auto;">
     <img height="20" src="https://img.shields.io/github/issues-pr/wordgrid-game/wordgrid" alt="GitHub Pull Requests" style="height: 20px; width: auto;">
