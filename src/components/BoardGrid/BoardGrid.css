@@ -57,6 +57,10 @@
   flex-direction: column;
 }
 
+.col-header > strong {
+  cursor: text;
+}
+
 .cell {
   width: var(--cell-size);
   height: var(--cell-size);
@@ -147,7 +151,17 @@
   text-transform: uppercase;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
+  :root {
+    --cell-size: min(100px, calc((100vw - 64px) / 4));
+  }
+  .logo-square img {
+    width: 96px !important;
+    height: 96px !important;
+  }
+}
+
+@media (max-width: 800px) {
   :root {
     --cell-size: min(100px, calc((100vw - 64px) / 4));
   }
