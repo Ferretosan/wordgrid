@@ -302,7 +302,6 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = ({
             </div>
             <div className="modal-body">
               <p className="modal-copy">
-                You are playing WordGrid<br></br>
                 <IconCalendarDue size={14} style={{ verticalAlign: 'middle' }} /> Version: {' '}
                 <span className="mono">
                   {(() => {
